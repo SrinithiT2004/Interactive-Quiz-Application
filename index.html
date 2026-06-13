@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QUIZORA — Interactive Quiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:        #0f0f13;
+  --surface:   #17171e;
+  --card:      #1e1e28;
+  --border:    #2a2a38;
+  --border-lt: #383848;
+  --muted:     #555570;
+  --dim:       #8888a8;
+  --text:      #c8c8e8;
+  --bright:    #f0f0ff;
+  --violet:    #7c5cfc;
+  --violet-lt: #9b80ff;
+  --violet-bg: rgba(124,92,252,.12);
+  --violet-glow:rgba(124,92,252,.3);
+  --correct:   #22d3a0;
+  --correct-bg:rgba(34,211,160,.1);
+  --wrong:     #f05a7e;
+  --wrong-bg:  rgba(240,90,126,.1);
+  --gold:      #f5c842;
+  --gold-bg:   rgba(245,200,66,.1);
+  --r:         14px;
+  --r-sm:      8px;
+}
+
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  position:relative;
+  overflow-x:hidden;
+}
+
+/* ── Ambient blobs ── */
+body::before,body::after{
+  content:'';position:fixed;border-radius:50%;pointer-events:none;z-index:0;
+  filter:blur(80px);opacity:.35;
+}
+body::before{
+  width:500px;height:500px;
+  background:radial-gradient(circle,rgba(124,92,252,.5),transparent 70%);
+  top:-120px;left:-120px;
+}
+body::after{
+  width:400px;height:400px;
+  background:radial-gradient(circle,rgba(34,211,160,.35),transparent 70%);
+  bottom:-100px;right:-100px;
+}
+
+.app-shell{position:relative;z-index:1;width:100%;max-width:760px}
+
+/* ══════════════════════════════
+   SCREEN SYSTEM
+══════════════════════════════ */
+.screen{display:none;animation:fadeUp .35s ease}
+.screen.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+
+/* ══════════════════════════════
+   HOME SCREEN
+══════════════════════════════ */
+.home-header{text-align:center;margin-bottom:44px;padding-top:12px}
+.home-logo{
+  display:inline-flex;align-items:center;gap:10px;
+  margin-bottom:24px;
+}
+.logo-gem{
+  width:46px;height:46px;border-radius:12px;
+  background:linear-gradient(135deg,var(--violet),#b060ff);
+  display:flex;align-items:center;justify-content:center;font-size:22px;
+  box-shadow:0 0 32px var(--violet-glow);
+}
+.logo-text{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--bright);letter-spacing:1px}
+.home-title{
+  font-family:'Syne',sans-serif;font-size:42px;font-weight:800;
+  color:var(--bright);line-height:1.1;letter-spacing:-.5px;
+  margin-bottom:12px;
+}
+.home-title .accent{
+  background:linear-gradient(90deg,var(--violet-lt),var(--correct));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.home-sub{font-size:16px;color:var(--dim);max-width:440px;margin:0 auto;line-height:1.6}
+
+/* Category grid */
+.cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:32px}
+.cat-card{
+  background:var(--card);border:2px solid var(--border);border-radius:var(--r);
+  padding:22px 16px;cursor:pointer;text-align:center;
+  transition:all .2s;position:relative;overflow:hidden;
+}
+.cat-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,var(--violet-bg),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.cat-card:hover::before,.cat-card.selected::before{opacity:1}
+.cat-card:hover{border-color:var(--violet);transform:translateY(-2px);box-shadow:0 8px 30px rgba(124,92,252,.2)}
+.cat-card.selected{border-color:var(--violet);box-shadow:0 0 0 3px var(--violet-bg)}
+.cat-emoji{font-size:32px;display:block;margin-bottom:10px}
+.cat-name{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--bright);margin-bottom:4px}
+.cat-count{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+
+/* Difficulty row */
+.options-row{display:flex;gap:12px;margin-bottom:28px;flex-wrap:wrap}
+.opt-group{flex:1;min-width:180px}
+.opt-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;font-family:'JetBrains Mono',monospace}
+.opt-pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{
+  padding:7px 16px;border-radius:20px;border:1.5px solid var(--border);
+  font-size:12px;font-weight:600;cursor:pointer;
+  color:var(--dim);background:transparent;
+  transition:all .15s;font-family:'Inter',sans-serif;
+}
+.pill:hover{border-color:var(--violet);color:var(--violet-lt)}
+.pill.active{background:var(--violet-bg);border-color:var(--violet);color:var(--violet-lt)}
+
+.start-btn{
+  width:100%;padding:16px;border-radius:var(--r);border:none;cursor:pointer;
+  background:linear-gradient(135deg,var(--violet),#b060ff);
+  font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:#fff;
+  letter-spacing:.5px;
+  box-shadow:0 4px 32px var(--violet-glow);
+  transition:all .2s;position:relative;overflow:hidden;
+}
+.start-btn::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.12),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.start-btn:hover{transform:translateY(-2px);box-shadow:0 8px 40px var(--violet-glow)}
+.start-btn:hover::after{opacity:1}
+.start-btn:active{transform:translateY(0)}
+
+/* ══════════════════════════════
+   QUIZ SCREEN
+══════════════════════════════ */
+.quiz-topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:28px;
+}
+.q-meta{display:flex;align-items:center;gap:16px}
+.q-cat-badge{
+  padding:5px 13px;border-radius:20px;
+  background:var(--violet-bg);border:1px solid var(--border-lt);
+  font-size:11px;font-weight:600;color:var(--violet-lt);
+  font-family:'JetBrains Mono',monospace;letter-spacing:.5px;
+}
+.q-counter{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--dim)}
+.q-right{display:flex;align-items:center;gap:16px}
+
+/* Timer ring */
+.timer-wrap{position:relative;width:52px;height:52px;flex-shrink:0}
+.timer-svg{transform:rotate(-90deg)}
+.timer-track{fill:none;stroke:var(--border);stroke-width:4}
+.timer-fill{fill:none;stroke:var(--violet);stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset .9s linear,stroke .3s}
+.timer-num{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;color:var(--bright);
+}
+
+/* Streak */
+.streak-wrap{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:20px;
+  background:var(--gold-bg);border:1px solid rgba(245,200,66,.25);
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--gold);
+}
+.streak-fire{font-size:14px}
+
+/* Score pill */
+.score-pill{
+  padding:5px 14px;border-radius:20px;
+  background:var(--surface);border:1px solid var(--border);
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--dim);
+}
+
+/* Progress bar */
+.progress-track{
+  height:4px;background:var(--border);border-radius:2px;
+  margin-bottom:28px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;background:linear-gradient(90deg,var(--violet),var(--correct));
+  border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1);
+}
+
+/* Question card */
+.q-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+  padding:32px;margin-bottom:20px;
+  position:relative;overflow:hidden;
+}
+.q-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--violet),var(--correct));
+}
+.q-difficulty{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;
+  margin-bottom:14px;font-family:'JetBrains Mono',monospace;
+}
+.diff-easy{color:var(--correct)}
+.diff-medium{color:var(--gold)}
+.diff-hard{color:var(--wrong)}
+.q-text{
+  font-family:'Syne',sans-serif;font-size:22px;font-weight:700;
+  color:var(--bright);line-height:1.4;
+}
+.q-hint{
+  margin-top:12px;font-size:13px;color:var(--muted);font-style:italic;
+  padding-top:12px;border-top:1px solid var(--border);
+}
+
+/* Answer options */
+.options-grid{display:flex;flex-direction:column;gap:11px;margin-bottom:24px}
+.option-btn{
+  display:flex;align-items:center;gap:16px;
+  background:var(--card);border:2px solid var(--border);
+  border-radius:var(--r-sm);padding:16px 20px;cursor:pointer;
+  transition:all .18s;text-align:left;width:100%;
+  position:relative;overflow:hidden;
+}
+.option-btn:hover:not(.locked){
+  border-color:var(--violet);background:var(--violet-bg);
+  transform:translateX(4px);
+}
+.option-btn.locked{cursor:default}
+.option-btn.selected-correct{
+  border-color:var(--correct);background:var(--correct-bg);
+  animation:correctPop .35s ease;
+}
+.option-btn.selected-wrong{
+  border-color:var(--wrong);background:var(--wrong-bg);
+  animation:wrongShake .35s ease;
+}
+.option-btn.reveal-correct{
+  border-color:var(--correct);background:var(--correct-bg);
+}
+@keyframes correctPop{0%{transform:scale(1)}50%{transform:scale(1.015)}100%{transform:scale(1)}}
+@keyframes wrongShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+.opt-key{
+  width:30px;height:30px;border-radius:6px;
+  background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+  color:var(--dim);flex-shrink:0;transition:all .15s;
+}
+.option-btn:hover:not(.locked) .opt-key{background:var(--violet-bg);border-color:var(--violet);color:var(--violet-lt)}
+.option-btn.selected-correct .opt-key{background:var(--correct-bg);border-color:var(--correct);color:var(--correct)}
+.option-btn.selected-wrong .opt-key{background:var(--wrong-bg);border-color:var(--wrong);color:var(--wrong)}
+.option-btn.reveal-correct .opt-key{background:var(--correct-bg);border-color:var(--correct);color:var(--correct)}
+.opt-text{font-size:14px;font-weight:500;color:var(--text);flex:1;line-height:1.4}
+.option-btn.selected-correct .opt-text{color:var(--correct)}
+.option-btn.selected-wrong .opt-text{color:var(--wrong)}
+.option-btn.reveal-correct .opt-text{color:var(--correct)}
+.opt-icon{font-size:18px;margin-left:auto;opacity:0;transition:opacity .15s}
+.option-btn.selected-correct .opt-icon,.option-btn.reveal-correct .opt-icon{opacity:1}
+.option-btn.selected-wrong .opt-icon{opacity:1}
+
+/* Feedback bar */
+.feedback-bar{
+  padding:14px 20px;border-radius:var(--r-sm);
+  font-size:14px;font-weight:600;margin-bottom:20px;
+  display:none;align-items:center;gap:10px;
+}
+.feedback-bar.show{display:flex}
+.feedback-bar.correct{background:var(--correct-bg);border:1px solid rgba(34,211,160,.3);color:var(--correct)}
+.feedback-bar.wrong{background:var(--wrong-bg);border:1px solid rgba(240,90,126,.3);color:var(--wrong)}
+.feedback-bar .fb-exp{color:var(--dim);font-weight:400;font-size:13px;margin-top:2px}
+
+/* Next button */
+.next-btn{
+  width:100%;padding:14px;border-radius:var(--r-sm);border:none;cursor:pointer;
+  background:var(--surface);border:2px solid var(--border);
+  font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:var(--dim);
+  transition:all .18s;display:none;
+}
+.next-btn.show{display:block}
+.next-btn:hover{border-color:var(--violet);color:var(--violet-lt);background:var(--violet-bg)}
+
+/* Keyboard hint */
+.kb-hint{text-align:center;margin-top:12px;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.kb-hint kbd{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;padding:1px 6px;font-size:10px;font-family:inherit;
+}
+
+/* ══════════════════════════════
+   RESULTS SCREEN
+══════════════════════════════ */
+.results-header{text-align:center;margin-bottom:36px}
+.results-trophy{font-size:64px;display:block;margin-bottom:16px;animation:trophyDrop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes trophyDrop{from{transform:scale(0) translateY(-30px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.results-title{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--bright);margin-bottom:8px}
+.results-sub{font-size:15px;color:var(--dim)}
+
+/* Score ring */
+.score-ring-wrap{
+  width:160px;height:160px;margin:0 auto 32px;position:relative;
+}
+.score-ring-wrap svg{transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--border);stroke-width:10}
+.ring-fill{fill:none;stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)}
+.score-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.score-pct{font-family:'Syne',sans-serif;font-size:34px;font-weight:800;color:var(--bright)}
+.score-lbl{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace;letter-spacing:1px}
+
+/* Stats grid */
+.results-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.rs-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:16px;text-align:center;
+}
+.rs-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--bright);margin-bottom:4px}
+.rs-key{font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace}
+
+/* Review list */
+.review-section{margin-bottom:28px}
+.review-title{
+  font-family:'Syne',sans-serif;font-size:16px;font-weight:700;
+  color:var(--bright);margin-bottom:14px;
+  display:flex;align-items:center;gap:8px;
+}
+.review-item{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:16px 18px;margin-bottom:10px;
+  border-left:3px solid var(--border);
+}
+.review-item.ri-correct{border-left-color:var(--correct)}
+.review-item.ri-wrong{border-left-color:var(--wrong)}
+.ri-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+.ri-q{font-size:13px;font-weight:600;color:var(--bright);flex:1;line-height:1.4}
+.ri-badge{
+  flex-shrink:0;padding:3px 9px;border-radius:10px;font-size:10px;font-weight:700;
+  font-family:'JetBrains Mono',monospace;
+}
+.ri-badge.correct{background:var(--correct-bg);color:var(--correct)}
+.ri-badge.wrong{background:var(--wrong-bg);color:var(--wrong)}
+.ri-answer{font-size:12px;color:var(--dim);}
+.ri-answer span{font-weight:600}
+.ri-answer .ca{color:var(--correct)}
+.ri-answer .wa{color:var(--wrong)}
+
+/* Results CTA */
+.results-cta{display:flex;gap:12px}
+.cta-btn{
+  flex:1;padding:13px;border-radius:var(--r-sm);border:none;cursor:pointer;
+  font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:.3px;
+  transition:all .18s;
+}
+.cta-primary{
+  background:linear-gradient(135deg,var(--violet),#b060ff);color:#fff;
+  box-shadow:0 4px 24px var(--violet-glow);
+}
+.cta-primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px var(--violet-glow)}
+.cta-secondary{
+  background:var(--surface);color:var(--dim);
+  border:2px solid var(--border);
+}
+.cta-secondary:hover{border-color:var(--violet);color:var(--violet-lt)}
+
+/* Confetti canvas */
+#confettiCanvas{position:fixed;inset:0;pointer-events:none;z-index:999}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .home-title{font-size:30px}
+  .cat-grid{grid-template-columns:repeat(2,1fr)}
+  .results-stats{grid-template-columns:repeat(2,1fr)}
+  .q-text{font-size:18px}
+  .q-card{padding:22px 18px}
+  .results-cta{flex-direction:column}
+}
+@media(max-width:380px){
+  .cat-grid{grid-template-columns:1fr}
+  .options-row{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<canvas id="confettiCanvas"></canvas>
+
+<div class="app-shell">
+
+<!-- ════════════════ HOME ════════════════ -->
+<div class="screen active" id="screen-home">
+  <div class="home-header">
+    <div class="home-logo">
+      <div class="logo-gem">🧠</div>
+      <div class="logo-text">QUIZORA</div>
+    </div>
+    <h1 class="home-title">Test what you<br><span class="accent">actually know.</span></h1>
+    <p class="home-sub">Pick a category, choose your difficulty, and race the clock. Every question is a chance to learn something new.</p>
+  </div>
+
+  <div class="opt-label" style="margin-bottom:12px">Choose a category</div>
+  <div class="cat-grid" id="catGrid">
+    <div class="cat-card selected" data-cat="science" onclick="selectCat(this)">
+      <span class="cat-emoji">🔬</span>
+      <div class="cat-name">Science</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+    <div class="cat-card" data-cat="history" onclick="selectCat(this)">
+      <span class="cat-emoji">🏛️</span>
+      <div class="cat-name">History</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+    <div class="cat-card" data-cat="geography" onclick="selectCat(this)">
+      <span class="cat-emoji">🌍</span>
+      <div class="cat-name">Geography</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+    <div class="cat-card" data-cat="tech" onclick="selectCat(this)">
+      <span class="cat-emoji">💻</span>
+      <div class="cat-name">Technology</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+    <div class="cat-card" data-cat="maths" onclick="selectCat(this)">
+      <span class="cat-emoji">📐</span>
+      <div class="cat-name">Mathematics</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+    <div class="cat-card" data-cat="popculture" onclick="selectCat(this)">
+      <span class="cat-emoji">🎬</span>
+      <div class="cat-name">Pop Culture</div>
+      <div class="cat-count">10 questions</div>
+    </div>
+  </div>
+
+  <div class="options-row">
+    <div class="opt-group">
+      <div class="opt-label">Difficulty</div>
+      <div class="opt-pills">
+        <span class="pill active" data-diff="mixed" onclick="selectPill(this,'diff')">Mixed</span>
+        <span class="pill" data-diff="easy" onclick="selectPill(this,'diff')">Easy</span>
+        <span class="pill" data-diff="hard" onclick="selectPill(this,'diff')">Hard</span>
+      </div>
+    </div>
+    <div class="opt-group">
+      <div class="opt-label">Questions</div>
+      <div class="opt-pills">
+        <span class="pill" data-num="5" onclick="selectPill(this,'num')">5</span>
+        <span class="pill active" data-num="10" onclick="selectPill(this,'num')">10</span>
+        <span class="pill" data-num="15" onclick="selectPill(this,'num')">15</span>
+      </div>
+    </div>
+    <div class="opt-group">
+      <div class="opt-label">Timer / question</div>
+      <div class="opt-pills">
+        <span class="pill" data-time="10" onclick="selectPill(this,'time')">10s</span>
+        <span class="pill active" data-time="20" onclick="selectPill(this,'time')">20s</span>
+        <span class="pill" data-time="30" onclick="selectPill(this,'time')">30s</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="start-btn" onclick="startQuiz()">Start Quiz →</button>
+</div>
+
+<!-- ════════════════ QUIZ ════════════════ -->
+<div class="screen" id="screen-quiz">
+  <div class="quiz-topbar">
+    <div class="q-meta">
+      <div class="q-cat-badge" id="qCatBadge">Science</div>
+      <div class="q-counter" id="qCounter">Q 1 / 10</div>
+    </div>
+    <div class="q-right">
+      <div class="streak-wrap" id="streakWrap">
+        <span class="streak-fire">🔥</span>
+        <span id="streakNum">0</span> streak
+      </div>
+      <div class="score-pill">Score: <span id="liveScore">0</span></div>
+      <div class="timer-wrap">
+        <svg class="timer-svg" width="52" height="52" viewBox="0 0 52 52">
+          <circle class="timer-track" cx="26" cy="26" r="22"/>
+          <circle class="timer-fill" id="timerCircle" cx="26" cy="26" r="22"
+            stroke-dasharray="138.2" stroke-dashoffset="0"/>
+        </svg>
+        <div class="timer-num" id="timerNum">20</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+
+  <div class="q-card">
+    <div class="q-difficulty" id="qDiff">Medium</div>
+    <div class="q-text" id="qText">Question loads here…</div>
+    <div class="q-hint" id="qHint" style="display:none"></div>
+  </div>
+
+  <div class="options-grid" id="optionsGrid"></div>
+
+  <div class="feedback-bar" id="feedbackBar">
+    <span id="fbIcon">✓</span>
+    <div>
+      <div id="fbMsg">Correct!</div>
+      <div class="fb-exp" id="fbExp"></div>
+    </div>
+  </div>
+
+  <button class="next-btn" id="nextBtn" onclick="nextQuestion()">
+    <span id="nextBtnLabel">Next question →</span>
+  </button>
+
+  <div class="kb-hint">Keyboard: <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd><kbd>D</kbd> to answer · <kbd>Enter</kbd> or <kbd>Space</kbd> to continue</div>
+</div>
+
+<!-- ════════════════ RESULTS ════════════════ -->
+<div class="screen" id="screen-results">
+  <div class="results-header">
+    <span class="results-trophy" id="resultsTrophy">🏆</span>
+    <div class="results-title" id="resultsTitle">Excellent!</div>
+    <div class="results-sub" id="resultsSub">You crushed it. Here's your breakdown.</div>
+  </div>
+
+  <div class="score-ring-wrap">
+    <svg width="160" height="160" viewBox="0 0 160 160">
+      <circle class="ring-track" cx="80" cy="80" r="70"/>
+      <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="70"
+        stroke-dasharray="439.8" stroke-dashoffset="439.8"/>
+    </svg>
+    <div class="score-center">
+      <div class="score-pct" id="scorePct">0%</div>
+      <div class="score-lbl">SCORE</div>
+    </div>
+  </div>
+
+  <div class="results-stats">
+    <div class="rs-card">
+      <div class="rs-val" id="rsCorrect">0</div>
+      <div class="rs-key">Correct</div>
+    </div>
+    <div class="rs-card">
+      <div class="rs-val" id="rsWrong">0</div>
+      <div class="rs-key">Wrong</div>
+    </div>
+    <div class="rs-card">
+      <div class="rs-val" id="rsStreak">0</div>
+      <div class="rs-key">Best Streak</div>
+    </div>
+    <div class="rs-card">
+      <div class="rs-val" id="rsTime">0s</div>
+      <div class="rs-key">Avg. Time</div>
+    </div>
+  </div>
+
+  <div class="review-section">
+    <div class="review-title">📋 Question Review</div>
+    <div id="reviewList"></div>
+  </div>
+
+  <div class="results-cta">
+    <button class="cta-btn cta-primary" onclick="restartSame()">Play Again</button>
+    <button class="cta-btn cta-secondary" onclick="goHome()">Change Category</button>
+  </div>
+</div>
+
+</div><!-- /app-shell -->
+
+<script>
+// ════════════════════════════════
+//  QUESTION BANK
+// ════════════════════════════════
+const QUESTIONS = {
+  science:[
+    {q:"What is the chemical symbol for gold?",opts:["Go","Gd","Au","Ag"],ans:2,diff:"easy",exp:"Gold's symbol Au comes from the Latin word 'aurum'."},
+    {q:"How many bones are in the adult human body?",opts:["206","212","198","224"],ans:0,diff:"easy",exp:"Adults have 206 bones. Babies start with ~270, which fuse over time."},
+    {q:"What is the speed of light in a vacuum?",opts:["300,000 km/s","150,000 km/s","450,000 km/s","1,080,000 km/h"],ans:0,diff:"medium",exp:"Light travels at approximately 299,792 km/s in a vacuum."},
+    {q:"Which planet has the most moons in our solar system?",opts:["Jupiter","Saturn","Uranus","Neptune"],ans:1,diff:"medium",exp:"Saturn leads with 146 confirmed moons as of 2024, edging past Jupiter."},
+    {q:"What is the powerhouse of the cell?",opts:["Nucleus","Ribosome","Mitochondria","Golgi apparatus"],ans:2,diff:"easy",exp:"Mitochondria produce ATP through cellular respiration."},
+    {q:"Which element has the highest melting point?",opts:["Iron","Osmium","Tungsten","Carbon"],ans:2,diff:"hard",exp:"Tungsten melts at 3,422°C — the highest of all pure metals."},
+    {q:"DNA stands for…",opts:["Deoxyribonucleic Acid","Dinitrogen Acid","Dual Nucleic Array","Deoxynitrogen Acid"],ans:0,diff:"easy",exp:"DNA carries genetic instructions for the development of living organisms."},
+    {q:"What is the most abundant gas in Earth's atmosphere?",opts:["Oxygen","Carbon dioxide","Argon","Nitrogen"],ans:3,diff:"easy",exp:"Nitrogen makes up about 78% of Earth's atmosphere."},
+    {q:"Which scientist formulated the theory of general relativity?",opts:["Isaac Newton","Niels Bohr","Albert Einstein","Max Planck"],ans:2,diff:"easy",exp:"Einstein published his theory of general relativity in 1915."},
+    {q:"A photon has zero rest mass. True or False?",opts:["True","False","Depends on frequency","Only in a vacuum"],ans:0,diff:"hard",exp:"Photons are massless particles — they always travel at the speed of light."},
+  ],
+  history:[
+    {q:"In which year did World War II end?",opts:["1943","1944","1945","1946"],ans:2,diff:"easy",exp:"WWII ended in 1945 — V-E Day in May and V-J Day in September."},
+    {q:"Who was the first President of the United States?",opts:["John Adams","Thomas Jefferson","George Washington","Benjamin Franklin"],ans:2,diff:"easy",exp:"George Washington served as the 1st U.S. President from 1789–1797."},
+    {q:"The Great Wall of China was primarily built during which dynasty?",opts:["Tang","Han","Ming","Qin"],ans:2,diff:"medium",exp:"Most of the existing Wall was built during the Ming Dynasty (1368–1644)."},
+    {q:"Which empire was ruled by Genghis Khan?",opts:["Ottoman Empire","Mongol Empire","Roman Empire","Persian Empire"],ans:1,diff:"easy",exp:"Genghis Khan founded and ruled the Mongol Empire, the largest contiguous land empire."},
+    {q:"The French Revolution began in which year?",opts:["1776","1789","1804","1815"],ans:1,diff:"medium",exp:"The French Revolution started in 1789 with the storming of the Bastille."},
+    {q:"Who wrote 'The Communist Manifesto'?",opts:["Lenin & Stalin","Trotsky & Engels","Marx & Engels","Marx & Lenin"],ans:2,diff:"medium",exp:"Karl Marx and Friedrich Engels published The Communist Manifesto in 1848."},
+    {q:"Which city was the capital of the Byzantine Empire?",opts:["Rome","Athens","Alexandria","Constantinople"],ans:3,diff:"medium",exp:"Constantinople (modern Istanbul) was the Byzantine capital until 1453."},
+    {q:"The Berlin Wall fell in which year?",opts:["1987","1988","1989","1990"],ans:2,diff:"easy",exp:"The Berlin Wall fell on November 9, 1989, reuniting East and West Germany."},
+    {q:"Who was the last pharaoh of ancient Egypt?",opts:["Cleopatra VII","Nefertiti","Ramesses II","Tutankhamun"],ans:0,diff:"hard",exp:"Cleopatra VII was the last active ruler of the Ptolemaic Kingdom of Egypt."},
+    {q:"The Magna Carta was signed in which year?",opts:["1215","1066","1415","1346"],ans:0,diff:"medium",exp:"King John of England signed the Magna Carta in 1215 at Runnymede."},
+  ],
+  geography:[
+    {q:"What is the capital of Australia?",opts:["Sydney","Melbourne","Brisbane","Canberra"],ans:3,diff:"medium",exp:"Canberra is the capital. Sydney is larger but was never the capital."},
+    {q:"Which is the world's longest river?",opts:["Amazon","Congo","Yangtze","Nile"],ans:3,diff:"easy",exp:"The Nile stretches ~6,650 km, making it the world's longest river."},
+    {q:"How many countries are in Africa?",opts:["48","54","60","42"],ans:1,diff:"medium",exp:"Africa has 54 recognised sovereign states."},
+    {q:"Which country has the most natural lakes?",opts:["Russia","USA","Brazil","Canada"],ans:3,diff:"hard",exp:"Canada has roughly 60% of the world's natural lakes — over 2 million."},
+    {q:"Mount Everest sits on the border of which two countries?",opts:["India & China","Nepal & China","Nepal & India","Bhutan & China"],ans:1,diff:"easy",exp:"Everest straddles the border between Nepal and the Tibet Autonomous Region of China."},
+    {q:"The Amazon River flows into which ocean?",opts:["Pacific","Indian","Arctic","Atlantic"],ans:3,diff:"easy",exp:"The Amazon discharges into the Atlantic Ocean near Marajó Island."},
+    {q:"Which country is both a continent and a nation?",opts:["Greenland","Iceland","New Zealand","Australia"],ans:3,diff:"easy",exp:"Australia is the only country that is also its own continent."},
+    {q:"What is the smallest country in the world by area?",opts:["Monaco","San Marino","Nauru","Vatican City"],ans:3,diff:"easy",exp:"Vatican City is only 0.44 km² — the world's smallest independent state."},
+    {q:"The Sahara Desert spans approximately how many km²?",opts:["5 million","7 million","9 million","11 million"],ans:2,diff:"hard",exp:"The Sahara covers ~9.2 million km², making it the world's largest hot desert."},
+    {q:"Which sea is the saltiest on Earth?",opts:["Red Sea","Dead Sea","Caspian Sea","Mediterranean Sea"],ans:1,diff:"medium",exp:"The Dead Sea has salinity ~34%, roughly 10x saltier than the ocean."},
+  ],
+  tech:[
+    {q:"What does 'HTTP' stand for?",opts:["HyperText Transfer Protocol","High Transfer Text Protocol","HyperText Transmission Protocol","Host Transfer Text Protocol"],ans:0,diff:"easy",exp:"HTTP is the foundation of data communication on the World Wide Web."},
+    {q:"Which company created the JavaScript programming language?",opts:["Microsoft","Google","Netscape","Sun Microsystems"],ans:2,diff:"medium",exp:"Brendan Eich created JavaScript in 1995 while working at Netscape."},
+    {q:"What does 'CPU' stand for?",opts:["Core Processing Unit","Central Processing Unit","Computer Power Unit","Central Program Utility"],ans:1,diff:"easy",exp:"The CPU is the primary component of a computer that processes instructions."},
+    {q:"Git was originally created by…",opts:["Linus Torvalds","Bill Gates","Dennis Ritchie","Ken Thompson"],ans:0,diff:"medium",exp:"Linus Torvalds created Git in 2005 to manage Linux kernel development."},
+    {q:"Which data structure uses LIFO (Last In, First Out)?",opts:["Queue","Linked List","Stack","Heap"],ans:2,diff:"medium",exp:"A stack follows LIFO — the last element added is the first to be removed."},
+    {q:"What is the binary equivalent of decimal 10?",opts:["1001","1010","1100","0110"],ans:1,diff:"medium",exp:"10 in binary is 1010 (8+2=10)."},
+    {q:"Which company developed the Android operating system?",opts:["Apple","Samsung","Microsoft","Google"],ans:3,diff:"easy",exp:"Android was developed by Android Inc., acquired by Google in 2005."},
+    {q:"In CSS, what does 'em' unit refer to?",opts:["Exact pixels","Screen width percent","Parent element's font-size","Root font-size"],ans:2,diff:"medium",exp:"'em' is relative to the font-size of the parent element."},
+    {q:"What does SQL stand for?",opts:["Structured Query Language","Simple Query Logic","Standard Query Library","System Query Language"],ans:0,diff:"easy",exp:"SQL is the standard language for managing relational databases."},
+    {q:"Big O notation O(log n) describes which algorithm type?",opts:["Linear search","Bubble sort","Binary search","Merge sort"],ans:2,diff:"hard",exp:"Binary search divides the search space in half each step, giving O(log n) complexity."},
+  ],
+  maths:[
+    {q:"What is the value of π (pi) to 4 decimal places?",opts:["3.1416","3.1415","3.1418","3.1412"],ans:0,diff:"easy",exp:"π ≈ 3.14159265… rounded to 4 d.p. is 3.1416."},
+    {q:"What is the square root of 144?",opts:["11","12","13","14"],ans:1,diff:"easy",exp:"12 × 12 = 144."},
+    {q:"If a triangle has angles 45°, 45°, what is the third?",opts:["45°","60°","90°","120°"],ans:2,diff:"easy",exp:"Angles in a triangle sum to 180°. 180 − 45 − 45 = 90°."},
+    {q:"What is 15% of 200?",opts:["25","30","35","40"],ans:1,diff:"easy",exp:"15% × 200 = 0.15 × 200 = 30."},
+    {q:"Which number is both a perfect square and a perfect cube?",opts:["16","64","36","100"],ans:1,diff:"medium",exp:"64 = 8² = 4³. It is both a perfect square and a perfect cube."},
+    {q:"What is the derivative of sin(x)?",opts:["-cos(x)","cos(x)","-sin(x)","tan(x)"],ans:1,diff:"hard",exp:"The derivative of sin(x) with respect to x is cos(x)."},
+    {q:"How many sides does a heptagon have?",opts:["5","6","7","8"],ans:2,diff:"easy",exp:"'Hepta' is Greek for seven. A heptagon has 7 sides."},
+    {q:"What is 2 raised to the power of 10?",opts:["512","1024","2048","256"],ans:1,diff:"medium",exp:"2¹⁰ = 1024. This is also 1 kilobyte in computing."},
+    {q:"Fibonacci sequence: 1, 1, 2, 3, 5, 8, __?",opts:["11","12","13","14"],ans:2,diff:"medium",exp:"Each Fibonacci number is the sum of the two before it: 5+8=13."},
+    {q:"What is the sum of interior angles of a hexagon?",opts:["540°","640°","720°","600°"],ans:2,diff:"medium",exp:"Sum = (n−2)×180° = (6−2)×180° = 720°."},
+  ],
+  popculture:[
+    {q:"Which film franchise features a character named 'Thanos'?",opts:["DC Universe","Star Wars","Marvel Cinematic Universe","Transformers"],ans:2,diff:"easy",exp:"Thanos is a villain in the Marvel Cinematic Universe, notably in Avengers: Infinity War."},
+    {q:"What is the best-selling video game of all time?",opts:["Tetris","Grand Theft Auto V","Minecraft","Wii Sports"],ans:2,diff:"medium",exp:"Minecraft has sold over 300 million copies — the best-selling game ever."},
+    {q:"Which streaming platform produced 'Stranger Things'?",opts:["HBO","Amazon Prime","Disney+","Netflix"],ans:3,diff:"easy",exp:"Stranger Things is a Netflix original series launched in 2016."},
+    {q:"Taylor Swift's '1989' album is named after…",opts:["A famous year in history","Her birth year","A phone model","A ZIP code"],ans:1,diff:"medium",exp:"Taylor Swift was born on December 13, 1989."},
+    {q:"Which country does the K-pop group BTS come from?",opts:["Japan","China","South Korea","Thailand"],ans:2,diff:"easy",exp:"BTS (Bangtan Sonyeondan) is a South Korean boy band formed in 2013."},
+    {q:"In 'The Lion King', what is Simba's father's name?",opts:["Rafiki","Mufasa","Scar","Zazu"],ans:1,diff:"easy",exp:"Mufasa is Simba's father, voiced by James Earl Jones in the original."},
+    {q:"Which social media platform is known for its 'stories' feature, originally pioneered by Snapchat?",opts:["Twitter","LinkedIn","Instagram","Pinterest"],ans:2,diff:"easy",exp:"Instagram popularised the Stories format after Snapchat first introduced disappearing content."},
+    {q:"'The Office' (US version) is set in which fictional company?",opts:["Initech","Dunder Mifflin","Globex","Prestige Worldwide"],ans:1,diff:"easy",exp:"The show follows employees of Dunder Mifflin Paper Company in Scranton, Pennsylvania."},
+    {q:"Which artist holds the record for most Grammy wins ever?",opts:["Adele","Beyoncé","Taylor Swift","Jay-Z"],ans:1,diff:"medium",exp:"Beyoncé holds the record with 32 Grammy wins as of 2024."},
+    {q:"The video game character 'Link' is the hero of which series?",opts:["Zelda","Halo","Final Fantasy","Metroid"],ans:0,diff:"easy",exp:"Link is the protagonist of Nintendo's 'The Legend of Zelda' series."},
+  ],
+};
+
+// ════════════════════════════════
+//  STATE
+// ════════════════════════════════
+let state = {
+  cat:'science', diff:'mixed', numQ:10, timePerQ:20,
+  questions:[], idx:0, score:0,
+  streak:0, bestStreak:0,
+  answers:[],  // {correct, chosen, time}
+  timer:null, timeLeft:0, qStartTime:0,
+  locked:false,
+};
+
+// ════════════════════════════════
+//  HOME INTERACTIONS
+// ════════════════════════════════
+function selectCat(el){
+  document.querySelectorAll('.cat-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.cat = el.dataset.cat;
+}
+function selectPill(el, group){
+  el.closest('.opt-pills').querySelectorAll('.pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  if(group==='diff') state.diff = el.dataset.diff;
+  else if(group==='num') state.numQ = parseInt(el.dataset.num);
+  else if(group==='time') state.timePerQ = parseInt(el.dataset.time);
+}
+
+// ════════════════════════════════
+//  START QUIZ
+// ════════════════════════════════
+function startQuiz(){
+  let pool = [...QUESTIONS[state.cat]];
+  // filter difficulty
+  if(state.diff !== 'mixed') pool = pool.filter(q=>q.diff === state.diff);
+  if(pool.length === 0) pool = [...QUESTIONS[state.cat]]; // fallback
+  // shuffle
+  pool = pool.sort(()=>Math.random()-.5);
+  state.questions = pool.slice(0, Math.min(state.numQ, pool.length));
+  state.idx = 0; state.score = 0; state.streak = 0; state.bestStreak = 0; state.answers = [];
+  state.locked = false;
+
+  showScreen('quiz');
+  document.getElementById('qCatBadge').textContent = catLabel(state.cat);
+  renderQuestion();
+}
+
+function catLabel(c){
+  return {science:'Science',history:'History',geography:'Geography',tech:'Technology',maths:'Mathematics',popculture:'Pop Culture'}[c]||c;
+}
+
+// ════════════════════════════════
+//  RENDER QUESTION
+// ════════════════════════════════
+const KEYS = ['A','B','C','D'];
+function renderQuestion(){
+  const q = state.questions[state.idx];
+  const total = state.questions.length;
+  state.locked = false;
+
+  // header
+  document.getElementById('qCounter').textContent = `Q ${state.idx+1} / ${total}`;
+  document.getElementById('progressFill').style.width = `${(state.idx/total)*100}%`;
+  document.getElementById('liveScore').textContent = state.score;
+  document.getElementById('streakNum').textContent = state.streak;
+  document.getElementById('streakWrap').style.opacity = state.streak > 0 ? '1' : '0.4';
+
+  // question
+  const diffEl = document.getElementById('qDiff');
+  diffEl.textContent = q.diff.charAt(0).toUpperCase()+q.diff.slice(1);
+  diffEl.className = `q-difficulty diff-${q.diff}`;
+  document.getElementById('qText').textContent = q.q;
+  const hintEl = document.getElementById('qHint');
+  if(q.hint){hintEl.textContent='💡 '+q.hint;hintEl.style.display='block';}
+  else hintEl.style.display='none';
+
+  // options
+  const grid = document.getElementById('optionsGrid');
+  grid.innerHTML = q.opts.map((o,i)=>`
+    <button class="option-btn" onclick="selectAnswer(${i})" data-idx="${i}">
+      <div class="opt-key">${KEYS[i]}</div>
+      <div class="opt-text">${o}</div>
+      <div class="opt-icon" id="optIcon${i}"></div>
+    </button>
+  `).join('');
+
+  // feedback + next
+  const fb = document.getElementById('feedbackBar');
+  fb.className = 'feedback-bar'; fb.style.display='';
+  document.getElementById('nextBtn').className = 'next-btn';
+
+  // timer
+  startTimer();
+  state.qStartTime = Date.now();
+}
+
+// ════════════════════════════════
+//  TIMER
+// ════════════════════════════════
+const CIRC = 138.2;
+function startTimer(){
+  clearInterval(state.timer);
+  state.timeLeft = state.timePerQ;
+  updateTimerUI();
+  state.timer = setInterval(()=>{
+    state.timeLeft--;
+    updateTimerUI();
+    if(state.timeLeft <= 0){
+      clearInterval(state.timer);
+      if(!state.locked) timeUp();
+    }
+  }, 1000);
+}
+function updateTimerUI(){
+  const pct = state.timeLeft / state.timePerQ;
+  const offset = CIRC * (1 - pct);
+  const circle = document.getElementById('timerCircle');
+  circle.style.strokeDashoffset = offset;
+  // color shift
+  if(pct > .5) circle.style.stroke = 'var(--violet)';
+  else if(pct > .25) circle.style.stroke = 'var(--gold)';
+  else circle.style.stroke = 'var(--wrong)';
+  document.getElementById('timerNum').textContent = state.timeLeft;
+}
+function timeUp(){
+  const q = state.questions[state.idx];
+  lockOptions(q.ans, -1);
+  showFeedback(false, "Time's up!", q.exp);
+  recordAnswer(false, -1);
+}
+
+// ════════════════════════════════
+//  ANSWER
+// ════════════════════════════════
+function selectAnswer(i){
+  if(state.locked) return;
+  state.locked = true;
+  clearInterval(state.timer);
+  const q = state.questions[state.idx];
+  const correct = i === q.ans;
+  lockOptions(q.ans, i);
+  if(correct){
+    const timeTaken = Math.round((Date.now()-state.qStartTime)/1000);
+    const bonus = state.timeLeft >= state.timePerQ*0.7 ? 2 : 1;
+    state.score += 10 * bonus;
+    state.streak++; if(state.streak > state.bestStreak) state.bestStreak = state.streak;
+    showFeedback(true, `Correct! ${bonus>1?'+20 pts (speed bonus!)':'+10 pts'}`, q.exp);
+  } else {
+    state.streak = 0;
+    showFeedback(false, `Wrong! The answer was: ${q.opts[q.ans]}`, q.exp);
+  }
+  recordAnswer(correct, i);
+  document.getElementById('liveScore').textContent = state.score;
+  document.getElementById('streakNum').textContent = state.streak;
+  document.getElementById('streakWrap').style.opacity = state.streak > 0 ? '1' : '0.4';
+}
+
+function lockOptions(correctIdx, chosenIdx){
+  document.querySelectorAll('.option-btn').forEach((btn,i)=>{
+    btn.classList.add('locked');
+    if(i === correctIdx && i === chosenIdx){
+      btn.classList.add('selected-correct');
+      document.getElementById(`optIcon${i}`).textContent='✓';
+    } else if(i === chosenIdx && i !== correctIdx){
+      btn.classList.add('selected-wrong');
+      document.getElementById(`optIcon${i}`).textContent='✗';
+    } else if(i === correctIdx){
+      btn.classList.add('reveal-correct');
+      document.getElementById(`optIcon${i}`).textContent='✓';
+    }
+  });
+}
+
+function showFeedback(correct, msg, exp){
+  const fb = document.getElementById('feedbackBar');
+  fb.className = 'feedback-bar show ' + (correct?'correct':'wrong');
+  document.getElementById('fbIcon').textContent = correct ? '✓' : '✗';
+  document.getElementById('fbMsg').textContent = msg;
+  document.getElementById('fbExp').textContent = exp || '';
+  const nb = document.getElementById('nextBtn');
+  nb.className = 'next-btn show';
+  const isLast = state.idx >= state.questions.length - 1;
+  document.getElementById('nextBtnLabel').textContent = isLast ? 'See results →' : 'Next question →';
+}
+
+function recordAnswer(correct, chosen){
+  const timeTaken = Math.round((Date.now()-state.qStartTime)/1000);
+  state.answers.push({correct, chosen, time:timeTaken, q:state.questions[state.idx]});
+}
+
+// ════════════════════════════════
+//  NEXT QUESTION
+// ════════════════════════════════
+function nextQuestion(){
+  if(!state.locked) return;
+  state.idx++;
+  if(state.idx >= state.questions.length) showResults();
+  else renderQuestion();
+}
+
+// ════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ════════════════════════════════
+document.addEventListener('keydown', e=>{
+  const qs = document.getElementById('screen-quiz');
+  if(!qs.classList.contains('active')) return;
+  const map = {a:0,b:1,c:2,d:3,1:0,2:1,3:2,4:3};
+  const k = e.key.toLowerCase();
+  if(k in map && !state.locked) selectAnswer(map[k]);
+  if((k==='enter'||k===' ') && state.locked){ e.preventDefault(); nextQuestion(); }
+});
+
+// ════════════════════════════════
+//  RESULTS
+// ════════════════════════════════
+function showResults(){
+  clearInterval(state.timer);
+  showScreen('results');
+
+  const total = state.questions.length;
+  const correct = state.answers.filter(a=>a.correct).length;
+  const pct = Math.round((correct/total)*100);
+  const avgTime = Math.round(state.answers.reduce((s,a)=>s+a.time,0)/total);
+
+  // trophy + title
+  let trophy='🏆', title='Excellent!', sub='You crushed it.';
+  if(pct>=90){trophy='🏆';title='Outstanding!';sub='Near perfect. You really know your stuff!'}
+  else if(pct>=70){trophy='🥇';title='Great Work!';sub="Solid performance. A few slips, but mostly brilliant."}
+  else if(pct>=50){trophy='🥈';title='Not Bad!';sub="A decent run. Review the ones you missed and try again."}
+  else{trophy='📚';title='Keep Practising';sub="Don't worry — every attempt teaches you something new."}
+  document.getElementById('resultsTrophy').textContent = trophy;
+  document.getElementById('resultsTitle').textContent = title;
+  document.getElementById('resultsSub').textContent = sub;
+
+  // score ring
+  document.getElementById('scorePct').textContent = pct+'%';
+  const ringFill = document.getElementById('ringFill');
+  const circum = 439.8;
+  const ringColor = pct>=70 ? 'var(--correct)' : pct>=50 ? 'var(--gold)' : 'var(--wrong)';
+  ringFill.style.stroke = ringColor;
+  setTimeout(()=>{ ringFill.style.strokeDashoffset = circum*(1-pct/100); }, 100);
+
+  // stats
+  document.getElementById('rsCorrect').textContent = correct;
+  document.getElementById('rsWrong').textContent = total - correct;
+  document.getElementById('rsStreak').textContent = state.bestStreak;
+  document.getElementById('rsTime').textContent = avgTime+'s';
+
+  // review
+  document.getElementById('reviewList').innerHTML = state.answers.map((a,i)=>(`
+    <div class="review-item ri-${a.correct?'correct':'wrong'}">
+      <div class="ri-top">
+        <div class="ri-q">Q${i+1}. ${a.q.q}</div>
+        <div class="ri-badge ${a.correct?'correct':'wrong'}">${a.correct?'✓ CORRECT':'✗ WRONG'}</div>
+      </div>
+      <div class="ri-answer">
+        ${a.correct
+          ? `<span class="ca">✓ ${a.q.opts[a.q.ans]}</span>`
+          : `<span class="wa">You said: ${a.chosen>=0?a.q.opts[a.chosen]:'No answer'}</span> &nbsp;·&nbsp; <span class="ca">Correct: ${a.q.opts[a.q.ans]}</span>`
+        }
+        &nbsp;·&nbsp; <span>${a.q.exp}</span>
+      </div>
+    </div>
+  `)).join('');
+
+  if(pct >= 70) launchConfetti();
+}
+
+// ════════════════════════════════
+//  CONFETTI
+// ════════════════════════════════
+function launchConfetti(){
+  const canvas = document.getElementById('confettiCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  const colors = ['#7c5cfc','#22d3a0','#f5c842','#f05a7e','#60a5fa','#fb7185'];
+  const particles = Array.from({length:120},()=>({
+    x: Math.random()*canvas.width,
+    y: Math.random()*-canvas.height,
+    r: Math.random()*6+3,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    vx: (Math.random()-.5)*3,
+    vy: Math.random()*4+2,
+    angle: Math.random()*360,
+    va: (Math.random()-.5)*5,
+    shape: Math.random()>.5?'rect':'circle',
+  }));
+  let frame=0;
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p=>{
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.rotate(p.angle*Math.PI/180);
+      ctx.fillStyle=p.color;
+      ctx.globalAlpha=Math.max(0,1-(frame/180));
+      if(p.shape==='rect') ctx.fillRect(-p.r,-p.r/2,p.r*2,p.r);
+      else{ctx.beginPath();ctx.arc(0,0,p.r,0,Math.PI*2);ctx.fill();}
+      ctx.restore();
+      p.x+=p.vx; p.y+=p.vy; p.angle+=p.va;
+    });
+    frame++;
+    if(frame<200) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  draw();
+}
+
+// ════════════════════════════════
+//  NAVIGATION
+// ════════════════════════════════
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function restartSame(){ startQuiz(); }
+function goHome(){ clearInterval(state.timer); showScreen('home'); }
+</script>
+</body>
+</html>
